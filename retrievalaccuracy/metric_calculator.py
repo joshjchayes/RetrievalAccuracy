@@ -1,3 +1,9 @@
+'''
+The MetricCalculator acts as an interface for all metric calculation
+
+'''
+
+
 from scipy.optimize import fsolve
 from scipy.spatial import distance
 import numpy as np
@@ -28,7 +34,7 @@ class MetricCalculator:
 
     def calculate_accuracy_metric(self, true_parameters, retrieved_parameters):
         '''
-        Calculates the accuracy metric, defined as the Euclidean distance
+        Calculates the accuracy metric, M1, defined as the Euclidean distance
         between two points in unit-normalised physical parameter space.
 
         Parameters
@@ -44,18 +50,24 @@ class MetricCalculator:
         -------
         accuracy_metric : float
             The Euclidean distance between the two given points
+        components : array_like, shape (n_parameters, )
+            The components of the accuracy metric.
         '''
         dimensionless_true = self.scaler.point_to_dimensionless(true_parameters)
         dimensionless_retrieved = self.scaler.point_to_dimensionless(retrieved_parameters)
 
-        return distance.euclidean(dimensionless_true, dimensionless_retrieved)
+        metric = distance.euclidean(dimensionless_true, dimensionless_retrieved)
+
+        return metric, dimensionless_true - dimensionless_retrieved
 
     def calculate_precision_metric(self, true_parameters, retrieved_parameters,
                                    uncertainty):
         '''
-        Calculates the precision metric, which is defined as the accuracy
-        metric scaled by the 1 sigma error in the direction of the vector
-        between the true and retrieved parameters
+        Calculates the precision metric, M2, defined as
+
+        M2^2 = sum((M1_i/uncertainty_i)^2)
+
+        where M1_i are components of the accuracy metric
 
         Parameters
         ----------
@@ -75,6 +87,8 @@ class MetricCalculator:
         -------
         precision_metric : float
             The precision metric associated with the retrieval results
+        metric_components : array_like, shape (n_parameters, )
+            The components of the precision metric.
         sigma : float
             The 1 sigma value in the direction of the vector between the true
             and retrieved parameters.
@@ -91,22 +105,24 @@ class MetricCalculator:
         mask = np.vstack((delta < 0, delta >= 0)).T
 
         # get the principal semi-axes which define the error ellipse
-        semiaxes = dimensionless_errors[mask]
+        sigma_components = dimensionless_errors[mask]
 
+        # UPDATE - since the redefinition of the precision metric, we no longer
+        # need to find the intercept to calculate the precision metric
         # Find the intercept between the error ellipse and the line joining
         # the true and retrieved position
-        intercept = _find_intercept(dimensionless_true, dimensionless_retrieved, semiaxes)
+        #intercept = _find_intercept(dimensionless_true, dimensionless_retrieved, sigma_components)
 
         # The 1 sigma distance is the distance between this intercept and the
         # retrieved parameter values (note dropping the scale factor from
         # intercept)
-        sigma = distance.euclidean(dimensionless_retrieved, intercept[:-1])
+        #sigma = distance.euclidean(dimensionless_retrieved, intercept[:-1])
 
         # Calculate the precision metric
-        # Distance between points
-        precision_metric = distance.euclidean(dimensionless_true, dimensionless_retrieved)/sigma
+        metric = np.sqrt(sum(((dimensionless_true - dimensionless_retrieved)/sigma_components) ** 2))
+        metric_components = (dimensionless_true - dimensionless_retrieved)/sigma_components
 
-        return precision_metric, sigma
+        return metric, metric_components, #sigma
 
     def calculate_metrics(self, true_parameters, retrieved_parameters,
                           uncertainty):
@@ -138,10 +154,10 @@ class MetricCalculator:
             and retrieved parameters.
 
         '''
-        accuracy = self.calculate_accuracy_metric(true_parameters, retrieved_parameters)
-        precision, sigma = self.calculate_precision_metric(true_parameters, retrieved_parameters, uncertainty)
+        accuracy, accuracy_components = self.calculate_accuracy_metric(true_parameters, retrieved_parameters)
+        precision, precision_components, sigma = self.calculate_precision_metric(true_parameters, retrieved_parameters, uncertainty)
 
-        return accuracy, precision, sigma
+        return accuracy, accuracy_components, precision, precision_components, #sigma
 
 
 def _intercept_eqn(p, true_pos, retr_pos, errors):

@@ -9,3 +9,5 @@ algorithms.
 
 from .metric_calculator import MetricCalculator
 #from .metric_plotter import MetricPlotter
+
+__version__='0.2.0'

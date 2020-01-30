@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="retrievalaccuracy",
-    version="0.1.0",
+    version="0.2.0",
     author="Joshua Hayes",
     author_email="joshjchayes@gmail.com",
     description="Metrics for evaluating the accuracy of parameter retrieval results",
